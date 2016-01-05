@@ -23,16 +23,12 @@ func TestContains(t *testing.T) {
 		{"zero", false},
 	}
 
-	trie, _ := NewTrie(words)
+	trie, _ := NewTrie(words, English)
 
 	for _, test := range tests {
-		res := trie.ContainsString(test.word)
+		res := trie.Contains([]rune(test.word))
 		if res != test.expect {
-			t.Errorf("ContainsString() expected %v, received %v for word '%v'", test.expect, res, test.word)
-		}
-		res = trie.ContainsSlice([]rune(test.word))
-		if res != test.expect {
-			t.Errorf("ContainsSlice() expected %v, received %v for word '%v'", test.expect, res, test.word)
+			t.Errorf("expected %v, received %v for word '%v'", test.expect, res, test.word)
 		}
 	}
 }

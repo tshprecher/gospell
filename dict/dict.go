@@ -1,21 +1,24 @@
 package dict
 
+// TODO: need to add something more here to help with efficiencies
+// based on different implementations, like a trie, etc?
 type Dict interface {
-	ContainsSlice(word []rune) bool
-	ContainsString(word string) bool
+	Contains(word []rune) bool
 }
 
 type Alphabet struct {
 	letters []rune
 }
 
-func (alph *Alphabet) Size() int {
-	return len(alph.letters)
+func (ab *Alphabet) Size() int {
+	return len(ab.letters)
 }
 
-func (alph *Alphabet) Index(r rune) (index int, ok bool) {
-	for i, _ := range alph.letters {
-		if alph.letters[i] == r {
+// TODO: benchmark map vs for loop. both constant time, but which
+// one is generally faster when considering memory, cpu cache?
+func (ab *Alphabet) Index(r rune) (index int, ok bool) {
+	for i, _ := range ab.letters {
+		if ab.letters[i] == r {
 			return i, true
 		}
 	}

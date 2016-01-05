@@ -6,15 +6,17 @@ import (
 
 // TODO: make this package protected?
 type Trie struct {
-	// TODO: make this an arbitrary alphabet
+	// TODO: distinguish between root and subsequent
+	// nodes to avoid having to copy values?
+	alphabet *Alphabet
 	// only handle lowercase english letters
 	children   [26]*Trie
 	terminates bool
 }
 
-func (t *Trie) ContainsSlice(word []rune) bool {
+func (t *Trie) Contains(word []rune) bool {
 	for _, l := range word {
-		idx, ok := toChildIndex(l)
+		idx, ok := t.alphabet.Index(l)
 		if !ok {
 			return false
 		}
@@ -32,29 +34,18 @@ func (t *Trie) ContainsSlice(word []rune) bool {
 	return true
 }
 
-func (t *Trie) ContainsString(word string) bool {
-	return t.ContainsSlice([]rune(word))
-}
-
-func toChildIndex(r rune) (index int, ok bool) {
-	if r < 'a' || r > 'z' {
-		return 0, false
-	}
-	return int(r - 'a'), true
-}
-
-func NewTrie(words []string) (*Trie, error) {
-	trie := new(Trie)
+func NewTrie(words []string, alphabet *Alphabet) (*Trie, error) {
+	trie := &Trie{alphabet: alphabet}
 	for _, w := range words {
-		runes := []rune(w)
+		letters := []rune(w)
 		currentTrie := trie
-		for _, r := range runes {
-			idx, ok := toChildIndex(r)
+		for _, l := range letters {
+			idx, ok := alphabet.Index(l)
 			if !ok {
-				return nil, errors.New("only characters from 'a' to 'z' allowed in trie")
+				return nil, errors.New("unicode char '%c' not found in alphabet.")
 			}
 			if currentTrie.children[idx] == nil {
-				nTrie := new(Trie)
+				nTrie := &Trie{alphabet: alphabet}
 				currentTrie.children[idx] = nTrie
 				currentTrie = nTrie
 			} else {
@@ -63,6 +54,5 @@ func NewTrie(words []string) (*Trie, error) {
 		}
 		currentTrie.terminates = true
 	}
-
 	return trie, nil
 }
