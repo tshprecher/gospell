@@ -3,18 +3,12 @@ package spellcheck
 
 import (
 	"github.com/tshprecher/gospell/dict"
+	"go/token"
 )
-
-// TODO: should I be strict and make these struct immutable outside the package by adding methods?
-type Position struct {
-	Line int
-	Column int
-}
 
 type Misspelling struct {
 	Word string
-	Suggestions []string
-	Locations []Position
+	Positions []token.Pos
 }
 
 type Result struct {
@@ -22,15 +16,16 @@ type Result struct {
 	Misspellings []Misspelling
 }
 
-type SpellChecker interface {
-	Check(word string, dict dict.Dict) (ok bool, suggestions *[]string)
+// TODO: add ability to return optional suggestions
+type Checker interface {
+	Check(word string, dict dict.Dict) bool
 }
 
-type StrictSpellChecker struct{}
+type StrictChecker struct{}
 
-func (s *StrictSpellChecker) Check(word string, dict dict.Dict) (bool, *[]string) {
+func (s *StrictChecker) Check(word string, dict dict.Dict) bool {
 	if dict.Contains([]rune(word)) {
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
