@@ -1,9 +1,10 @@
-package dict
+package main
 
 // TODO: need to add something more here to help with efficiencies
 // based on different implementations, like a trie, etc?
 type Dict interface {
 	Contains(word []rune) bool
+	Alphabet() Alphabet
 }
 
 type Alphabet struct {

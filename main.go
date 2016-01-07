@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/tshprecher/gospell/spellcheck"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -14,16 +13,16 @@ import (
 
 var (
 	fileset *token.FileSet = token.NewFileSet()
-	checker = new(spellcheck.StrictChecker)
+	checker = new(StrictChecker)
 )
 
-func processFile(filename string) (res *spellcheck.Result, err error) {
+func processFile(filename string) (res *Result, err error) {
 	src, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return
 	}
 
-	res = &spellcheck.Result{filename, nil}
+	res = &Result{filename, nil}
 
 	ast, err := parser.ParseFile(fileset, filename, src, parser.ParseComments)
 
@@ -40,7 +39,7 @@ func processFile(filename string) (res *spellcheck.Result, err error) {
 	return
 }
 
-func handleCommentGroup(cg *ast.CommentGroup, src []byte, res *spellcheck.Result) {
+func handleCommentGroup(cg *ast.CommentGroup, src []byte, res *Result) {
 	if cg == nil {
 		return
 	}

@@ -1,4 +1,4 @@
-package dict
+package main
 
 import (
 	"errors"
@@ -8,7 +8,7 @@ import (
 type Trie struct {
 	// TODO: distinguish between root and subsequent
 	// nodes to avoid having to copy values?
-	alphabet *Alphabet
+	alphabet Alphabet
 	// only handle lowercase english letters
 	children   [26]*Trie
 	terminates bool
@@ -34,7 +34,11 @@ func (t *Trie) Contains(word []rune) bool {
 	return true
 }
 
-func NewTrie(words []string, alphabet *Alphabet) (*Trie, error) {
+func (t *Trie) Alphabet() Alphabet {
+	return t.alphabet
+}
+
+func NewTrie(words []string, alphabet Alphabet) (*Trie, error) {
 	trie := &Trie{alphabet: alphabet}
 	for _, w := range words {
 		letters := []rune(w)
