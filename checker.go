@@ -1,5 +1,9 @@
 package main
 
+import (
+//	"fmt"
+)
+
 // TODO: add ability to return optional suggestions
 type Checker interface {
 	// IsMisspelled returns false if the word is classified as misspelled.
@@ -26,6 +30,12 @@ func (dc *DeltaChecker) IsMisspelled(word string, dict Dict) bool {
 	if dict.Contains(wordSlice) {
 		return false
 	}
+	ab := dict.Alphabet()
+	for _, r := range(wordSlice) {
+		if _, ok := ab.Index(r); !ok {
+			return false
+		}
+	}
 
 	buf := make([]rune, len(wordSlice)+dc.AllowedIns)
 	copy(buf, wordSlice)
@@ -48,6 +58,7 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, len, ins, del,
 		if swaps > 0 && w < len-1 {
 			word[w], word[w+1] = word[w+1], word[w]
 			if dict.Contains(word[:len]) || dc.isMisspelledDelta(word, dict, len, ins, del, swaps-1) {
+//				fmt.Printf("suggested swap: '%v'\n", string(word[:len]))
 				return true
 			}
 			word[w], word[w+1] = word[w+1], word[w]
@@ -62,6 +73,7 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, len, ins, del,
 
 				word[w] = r
 				if dict.Contains(word[:len]) || dc.isMisspelledDelta(word, dict, len+1, ins-1, del, swaps) {
+//					fmt.Printf("suggested insertion: '%v'\n", string(word[:len]))
 					return true
 				}
 
@@ -79,6 +91,7 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, len, ins, del,
 			}
 
 			if dict.Contains(word[:len]) || dc.isMisspelledDelta(word, dict, len-1, ins, del-1, swaps) {
+//				fmt.Printf("suggested deletion: '%v'\n", string(word[:len]))
 				return true
 			}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+//	"fmt"
 )
 
 // TODO: make this package protected?
@@ -10,7 +11,7 @@ type Trie struct {
 	// nodes to avoid having to copy values?
 	alphabet Alphabet
 	// only handle lowercase english letters
-	children   [26]*Trie
+	children   [28]*Trie // hardcoded. yup, it's big time hacky
 	terminates bool
 }
 
@@ -48,6 +49,8 @@ func NewTrie(words []string, alphabet Alphabet) (*Trie, error) {
 			if !ok {
 				return nil, errors.New("unicode char '%c' not found in alphabet.")
 			}
+//			fmt.Printf("currentTrie.children -> '%v'\n", currentTrie.children)
+//			fmt.Printf("rune -> '%c', idx -> '%d'\n", l, idx)
 			if currentTrie.children[idx] == nil {
 				nTrie := &Trie{alphabet: alphabet}
 				currentTrie.children[idx] = nTrie

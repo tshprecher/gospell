@@ -7,7 +7,7 @@ import (
 
 type Misspelling struct {
 	Word string
-	Line []int
+	Line int
 }
 
 type Result struct {
@@ -17,10 +17,11 @@ type Result struct {
 
 func (r Result) String() string {
 	var buffer bytes.Buffer
-	for _, misp := range r.Misspellings {
-		for _, line := range misp.Line {
-			// TODO: proper line number formatting?
-			buffer.WriteString(fmt.Sprintf("%s:%d '%s'\n", r.Filename, line, misp.Word))
+	for m, misp := range r.Misspellings {
+		// TODO: proper line number formatting?
+		buffer.WriteString(fmt.Sprintf("%s:%d '%s'", r.Filename, misp.Line, misp.Word))
+		if m != len(r.Misspellings)-1 {
+			buffer.WriteRune('\n')
 		}
 	}
 	return buffer.String()

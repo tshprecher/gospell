@@ -1,4 +1,6 @@
 // Package main runs this
+// line two
+// line three
 package main
 
 import (
@@ -9,14 +11,15 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 )
 
 var (
 	fileset *token.FileSet = token.NewFileSet()
-	checker                = new(StrictChecker)
+	checker Checker        = new(StrictChecker)
 )
 
-func processFile(filename string) (res *Result, err error) {
+func processFile(filename string, dict Dict) (res *Result, err error) {
 	src, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return
@@ -35,16 +38,31 @@ func processFile(filename string) (res *Result, err error) {
 	// fmt.Printf("unresolved -> %v\n", ast.Unresolved)
 	// fmt.Printf("comments -> %v\n", ast.Comments)
 
-	handleCommentGroup(ast.Doc, src, res)
+	handleCommentGroup(ast.Doc, src, dict, res)
+	for _, com := range(ast.Comments) {
+		handleCommentGroup(com, src, dict, res)
+	}
 	return
 }
 
-func handleCommentGroup(cg *ast.CommentGroup, src []byte, res *Result) {
+func handleCommentGroup(cg *ast.CommentGroup, src []byte, dict Dict, res *Result) {
 	if cg == nil {
 		return
 	}
 	for _, com := range cg.List {
-		fmt.Printf("checking CommentGroup -> %v\n", stringFromPosition(src, com.Pos(), com.End()))
+		line := stringFromPosition(src, com.Pos(), com.End())
+//		fmt.Println("comment line ", line)
+		for _, word := range(strings.Split(line, " ")) {
+			if word == "//" {
+				continue
+			}
+			ab := dict.Alphabet()
+			sanitized := ab.Sanitize(word)
+			if len(sanitized) > 4 && checker.IsMisspelled(sanitized, dict) {
+				misp := Misspelling{sanitized, fileset.Position(com.Pos()).Line}
+				res.Misspellings = append(res.Misspellings, misp)
+			}
+		}
 	}
 }
 
@@ -54,6 +72,7 @@ func stringFromPosition(src []byte, start, end token.Pos) string {
 	return string(src[beginOffset:endOffset])
 }
 
+// It's almost hard to beleive this works! :)
 func main() {
 	if len(os.Args) == 1 {
 		log.Fatal("missing file argument.")
@@ -63,11 +82,18 @@ func main() {
 		log.Fatal("only one file argument allowed.")
 	}
 
-	res, err := processFile(os.Args[1])
+	dict, err := NewTrie(words, English)
 
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
-	fmt.Printf("spell check ran with result -> %v\n", res)
+	checker = &DeltaChecker{1, 1, 1}
+	res, err := processFile(os.Args[1], dict)
+
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	fmt.Println(res)
 }
