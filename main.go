@@ -13,7 +13,7 @@ import (
 
 var (
 	fileset *token.FileSet = token.NewFileSet()
-	checker = new(StrictChecker)
+	checker                = new(StrictChecker)
 )
 
 func processFile(filename string) (res *Result, err error) {
@@ -43,7 +43,7 @@ func handleCommentGroup(cg *ast.CommentGroup, src []byte, res *Result) {
 	if cg == nil {
 		return
 	}
-	for  _, com := range(cg.List) {
+	for _, com := range cg.List {
 		fmt.Printf("checking CommentGroup -> %v\n", stringFromPosition(src, com.Pos(), com.End()))
 	}
 }

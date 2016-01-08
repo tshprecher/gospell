@@ -1,6 +1,5 @@
 package main
 
-
 // TODO: add ability to return optional suggestions
 type Checker interface {
 	// IsMisspelled returns false if the word is classified as misspelled.
@@ -34,6 +33,11 @@ func (dc *DeltaChecker) IsMisspelled(word string, dict Dict) bool {
 }
 
 // TODO: make this efficient and FAST!
+// 1) do this iteratively instead of recursively
+// 2) as small as slices may be, we can pass the beg and end indices to Contains
+// 3) create a data structure that efficiently does the insertions and deletions,
+//    allowing underlying Dict implementations like Tries to take advantage of their
+//    representation
 func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, len, ins, del, swaps int) bool {
 	if ins <= 0 && del <= 0 && swaps <= 0 {
 		return dict.Contains(word[:len])
@@ -51,7 +55,7 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, len, ins, del,
 
 		// attempt insertion
 		if ins > 0 {
-			for _, r := range(dict.Alphabet().letters) {
+			for _, r := range dict.Alphabet().letters {
 				for l := len; l > w; l-- {
 					word[l] = word[l-1]
 				}
@@ -70,15 +74,15 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, len, ins, del,
 		// attempt deletion
 		if del > 0 && len > 0 {
 			deleted := word[w]
-			for l := w+1; l < len; l++ {
+			for l := w + 1; l < len; l++ {
 				word[l-1] = word[l]
 			}
 
-			if dict.Contains(word[:len]) ||  dc.isMisspelledDelta(word, dict, len-1, ins, del-1, swaps) {
+			if dict.Contains(word[:len]) || dc.isMisspelledDelta(word, dict, len-1, ins, del-1, swaps) {
 				return true
 			}
 
-			for l := len-1; l > w; l-- {
+			for l := len - 1; l > w; l-- {
 				word[l] = word[l-1]
 			}
 			word[w] = deleted

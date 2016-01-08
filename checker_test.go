@@ -2,7 +2,6 @@ package main
 
 import "testing"
 
-
 func TestStrictChecker(t *testing.T) {
 	words := []string{
 		"one",
@@ -42,19 +41,19 @@ func TestDeltaChecker(t *testing.T) {
 		expect bool
 	}{
 		{"one", false},
-		{"oen", true},         // swapped chars           -> misspelled
-		{"oenn", true},        // swapped + insertion     -> misspelled
-		{"oene", true},        // insertion               -> misspelled
-		{"oeene", false},      // two insertions          -> not misspelled
-		{"tree", true},        // deletion                -> misspelled
-		{"ene", true},         // deletion + insertion    -> misspelled
-		{"tee", false},        // two deletions           -> misspelled
-		{"twotwotwo", false},  // too many insertions     -> not misspelled
+		{"oen", true},        // swapped chars           -> misspelled
+		{"oenn", true},       // swapped + insertion     -> misspelled
+		{"oene", true},       // insertion               -> misspelled
+		{"oeene", false},     // two insertions          -> not misspelled
+		{"tree", true},       // deletion                -> misspelled
+		{"ene", true},        // deletion + insertion    -> misspelled
+		{"tee", false},       // two deletions           -> misspelled
+		{"twotwotwo", false}, // too many insertions     -> not misspelled
 	}
 
 	dc := DeltaChecker{
-		AllowedIns: 1,
-		AllowedDel: 1,
+		AllowedIns:   1,
+		AllowedDel:   1,
 		AllowedSwaps: 1}
 
 	dict, _ := NewTrie(words, English)
