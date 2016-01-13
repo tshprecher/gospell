@@ -4,6 +4,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -11,38 +12,70 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 var (
+	// TODO: put minLength in the delta checker
+	minLength = flag.Int("l", 4, "filter out words less than 'l' characters")
+	maxSwaps  = flag.Int("s", 1, "correct spelling up to 's' consecutive character swaps")
+	maxIns    = flag.Int("i", 0, "correct spelling up to 'i' character insertions")
+	maxDel    = flag.Int("d", 0, "correct spelling up to 'd' character deletions")
+
 	fileset *token.FileSet = token.NewFileSet()
-	checker Checker        = new(StrictChecker)
+	checker Checker
 )
 
-func processFile(filename string, dict Dict) (res *Result, err error) {
-	src, err := ioutil.ReadFile(filename)
+func checkError(err error) {
 	if err != nil {
-		return
+		log.Fatal(err.Error())
+	}
+}
+
+func processDir(dir string, dict Dict) error {
+	var visit = func(path string, f os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// TODO: generalize into a fn
+		if !f.IsDir() && !strings.HasPrefix(f.Name(), ".") && strings.HasSuffix(f.Name(), ".go") {
+			res, err := processFile(path, dict)
+			if err != nil {
+				return err
+			}
+			fmt.Print(res)
+		}
+		return nil
 	}
 
-	res = &Result{filename, nil}
+	err := filepath.Walk(dir, visit)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func processFile(filename string, dict Dict) (*Result, error) {
+	src, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	res := &Result{filename, nil}
 
 	ast, err := parser.ParseFile(fileset, filename, src, parser.ParseComments)
 
-	// fmt.Printf("doc -> %v\n", ast.Doc)
-	// fmt.Printf("package -> %v\n", ast.Name)
-	// fmt.Printf("decls -> %v\n", ast.Decls)
-	// fmt.Printf("scope -> %v\n", ast.Scope)
-	// fmt.Printf("scope.outer -> %v\n", ast.Scope.Outer)
-	// fmt.Printf("imports -> %v\n", ast.Imports)
-	// fmt.Printf("unresolved -> %v\n", ast.Unresolved)
-	// fmt.Printf("comments -> %v\n", ast.Comments)
+	if err != nil {
+		return nil, err
+	}
 
 	handleCommentGroup(ast.Doc, src, dict, res)
-	for _, com := range(ast.Comments) {
+	for _, com := range ast.Comments {
 		handleCommentGroup(com, src, dict, res)
 	}
-	return
+	return res, nil
 }
 
 func handleCommentGroup(cg *ast.CommentGroup, src []byte, dict Dict, res *Result) {
@@ -51,14 +84,13 @@ func handleCommentGroup(cg *ast.CommentGroup, src []byte, dict Dict, res *Result
 	}
 	for _, com := range cg.List {
 		line := stringFromPosition(src, com.Pos(), com.End())
-//		fmt.Println("comment line ", line)
-		for _, word := range(strings.Split(line, " ")) {
+		for _, word := range strings.Split(line, " ") {
 			if word == "//" {
 				continue
 			}
 			ab := dict.Alphabet()
 			sanitized := ab.Sanitize(word)
-			if len(sanitized) > 4 && checker.IsMisspelled(sanitized, dict) {
+			if len(sanitized) > *minLength && checker.IsMisspelled(sanitized, dict) {
 				misp := Misspelling{sanitized, fileset.Position(com.Pos()).Line}
 				res.Misspellings = append(res.Misspellings, misp)
 			}
@@ -72,28 +104,39 @@ func stringFromPosition(src []byte, start, end token.Pos) string {
 	return string(src[beginOffset:endOffset])
 }
 
+func checkPositiveArg(value *int, arg string) {
+	if *value < 0 {
+		log.Fatalf("arg '%v' must be positive.", arg)
+	}
+}
+
 // It's almost hard to beleive this works! :)
 func main() {
-	if len(os.Args) == 1 {
-		log.Fatal("missing file argument.")
+	flag.Parse()
+	checkPositiveArg(minLength, "l")
+	checkPositiveArg(maxSwaps, "s")
+	checkPositiveArg(maxIns, "i")
+	checkPositiveArg(maxDel, "d")
+
+	checker = &DeltaChecker{
+		AllowedIns:   *maxIns,
+		AllowedDel:   *maxDel,
+		AllowedSwaps: *maxSwaps}
+
+	for a := 0; a < flag.NArg(); a++ {
+		filename := flag.Arg(a)
+		fileInfo, err := os.Stat(filename)
+		checkError(err)
+		dict, err := NewTrie(words, English)
+		checkError(err)
+
+		if fileInfo.IsDir() {
+			err = processDir(filename, dict)
+			checkError(err)
+		} else {
+			res, err := processFile(filename, dict)
+			checkError(err)
+			fmt.Print(res)
+		}
 	}
-	if len(os.Args) > 2 {
-		// TODO: allow multiple files
-		log.Fatal("only one file argument allowed.")
-	}
-
-	dict, err := NewTrie(words, English)
-
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	checker = &DeltaChecker{1, 1, 1}
-	res, err := processFile(os.Args[1], dict)
-
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	fmt.Println(res)
 }

@@ -17,12 +17,8 @@ type Result struct {
 
 func (r Result) String() string {
 	var buffer bytes.Buffer
-	for m, misp := range r.Misspellings {
-		// TODO: proper line number formatting?
-		buffer.WriteString(fmt.Sprintf("%s:%d '%s'", r.Filename, misp.Line, misp.Word))
-		if m != len(r.Misspellings)-1 {
-			buffer.WriteRune('\n')
-		}
+	for _, misp := range r.Misspellings {
+		buffer.WriteString(fmt.Sprintf("%s:%d '%s'\n", r.Filename, misp.Line, misp.Word))
 	}
 	return buffer.String()
 }
