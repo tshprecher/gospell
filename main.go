@@ -6,6 +6,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/tshprecher/gospell/check"
+	"github.com/tshprecher/gospell/lang"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -24,7 +26,7 @@ var (
 	maxDel    = flag.Int("d", 0, "correct spelling up to 'd' character deletions")
 
 	fileset *token.FileSet = token.NewFileSet()
-	checker Checker
+	checker check.Checker
 )
 
 func checkError(err error) {
@@ -33,7 +35,7 @@ func checkError(err error) {
 	}
 }
 
-func processDir(dir string, dict Dict) error {
+func processDir(dir string, dict check.Dict) error {
 	var visit = func(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -57,7 +59,7 @@ func processDir(dir string, dict Dict) error {
 	return nil
 }
 
-func processFile(filename string, dict Dict) (*Result, error) {
+func processFile(filename string, dict check.Dict) (*Result, error) {
 	src, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -78,7 +80,7 @@ func processFile(filename string, dict Dict) (*Result, error) {
 	return res, nil
 }
 
-func handleCommentGroup(cg *ast.CommentGroup, src []byte, dict Dict, res *Result) {
+func handleCommentGroup(cg *ast.CommentGroup, src []byte, dict check.Dict, res *Result) {
 	if cg == nil {
 		return
 	}
@@ -88,11 +90,14 @@ func handleCommentGroup(cg *ast.CommentGroup, src []byte, dict Dict, res *Result
 			if word == "//" {
 				continue
 			}
-			ab := dict.Alphabet()
-			sanitized := ab.Sanitize(word)
-			if len(sanitized) > *minLength && checker.IsMisspelled(sanitized, dict) {
-				misp := Misspelling{sanitized, fileset.Position(com.Pos()).Line}
-				res.Misspellings = append(res.Misspellings, misp)
+			sanitized := dict.Alphabet().Sanitize(word)
+			if len(sanitized) > *minLength {
+				// TODO: can we do short circuit eval with fns returning mul values instead of nesting ifs?
+				if m, _ := checker.IsMisspelled(sanitized, dict); m {
+					// TODO: handle the suggestion(s)
+					misp := Misspelling{sanitized, fileset.Position(com.Pos()).Line}
+					res.Misspellings = append(res.Misspellings, misp)
+				}
 			}
 		}
 	}
@@ -110,7 +115,6 @@ func checkPositiveArg(value *int, arg string) {
 	}
 }
 
-// It's almost hard to beleive this works! :)
 func main() {
 	flag.Parse()
 	checkPositiveArg(minLength, "l")
@@ -118,7 +122,7 @@ func main() {
 	checkPositiveArg(maxIns, "i")
 	checkPositiveArg(maxDel, "d")
 
-	checker = &DeltaChecker{
+	checker = &check.DeltaChecker{
 		AllowedIns:   *maxIns,
 		AllowedDel:   *maxDel,
 		AllowedSwaps: *maxSwaps}
@@ -127,7 +131,8 @@ func main() {
 		filename := flag.Arg(a)
 		fileInfo, err := os.Stat(filename)
 		checkError(err)
-		dict, err := NewTrie(words, English)
+		// TODO: define a Language struct encapsulating alphabet and words
+		dict, err := check.NewTrie(lang.Words, lang.English)
 		checkError(err)
 
 		if fileInfo.IsDir() {
