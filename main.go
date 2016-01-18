@@ -4,14 +4,13 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/tshprecher/gospell/check"
 	"github.com/tshprecher/gospell/lang"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io/ioutil"
+	"go/token"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,14 +18,22 @@ import (
 )
 
 var (
-	// TODO: put minLength in the delta checker
-	minLength = flag.Int("l", 4, "filter out words less than 'l' characters")
-	maxSwaps  = flag.Int("s", 1, "correct spelling up to 's' consecutive character swaps")
-	maxIns    = flag.Int("i", 0, "correct spelling up to 'i' character insertions")
-	maxDel    = flag.Int("d", 0, "correct spelling up to 'd' character deletions")
+	// tunable variables
+	minLength = flag.Int("vL", 4, "filter out words less than 'l' characters")
+	maxSwaps  = flag.Int("vS", 1, "correct spelling up to 's' consecutive character swaps")
+	maxIns    = flag.Int("vI", 0, "correct spelling up to 'i' character insertions")
+	maxDel    = flag.Int("vD", 0, "correct spelling up to 'd' character deletions")
 
-	fileset *token.FileSet = token.NewFileSet()
+	// flags for other languages (comments only)
+	langC     = flag.Bool("c", false, "process C files")
+	langCpp   = flag.Bool("cpp", false, "process C++ files")
+	langJava  = flag.Bool("java", false, "process Java files")
+	langScala  = flag.Bool("scala", false, "process Scala files")
+
+	fileSuffix string = ".go" // TODO: adapt for multiple suffixes, e.g. ".cpp" and ".cc"
+	fileset *token.FileSet = token.NewFileSet() // TODO: put this in process.go?
 	checker check.Checker
+	proc  processor
 )
 
 func checkError(err error) {
@@ -35,16 +42,33 @@ func checkError(err error) {
 	}
 }
 
+func isInputFile(finfo os.FileInfo) bool {
+	return !finfo.IsDir() &&
+		!strings.HasPrefix(finfo.Name(), ".") &&
+		strings.HasSuffix(finfo.Name(), fileSuffix)
+}
+
+func processFile(filename string, dict check.Dict) (*fileResult, error) {
+	src, err := ioutil.ReadFile(filename)
+	if err != nil {
+	 	return nil, err
+	}
+	return proc.process(filename, src, dict)
+}
+
 func processDir(dir string, dict check.Dict) error {
+	var fileFound = false
 	var visit = func(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// TODO: generalize into a fn
-		if !f.IsDir() && !strings.HasPrefix(f.Name(), ".") && strings.HasSuffix(f.Name(), ".go") {
+		if isInputFile(f) {
+			fileFound = true
+//			fmt.Printf("debug: processing file %s\n", path)
 			res, err := processFile(path, dict)
 			if err != nil {
+				fmt.Println(err)
 				return err
 			}
 			fmt.Print(res)
@@ -56,57 +80,10 @@ func processDir(dir string, dict check.Dict) error {
 	if err != nil {
 		return err
 	}
+	if !fileFound {
+		fmt.Println("no input files found.")
+	}
 	return nil
-}
-
-func processFile(filename string, dict check.Dict) (*Result, error) {
-	src, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	res := &Result{filename, nil}
-
-	ast, err := parser.ParseFile(fileset, filename, src, parser.ParseComments)
-
-	if err != nil {
-		return nil, err
-	}
-
-	handleCommentGroup(ast.Doc, src, dict, res)
-	for _, com := range ast.Comments {
-		handleCommentGroup(com, src, dict, res)
-	}
-	return res, nil
-}
-
-func handleCommentGroup(cg *ast.CommentGroup, src []byte, dict check.Dict, res *Result) {
-	if cg == nil {
-		return
-	}
-	for _, com := range cg.List {
-		line := stringFromPosition(src, com.Pos(), com.End())
-		for _, word := range strings.Split(line, " ") {
-			if word == "//" {
-				continue
-			}
-			sanitized := dict.Alphabet().Sanitize(word)
-			if len(sanitized) > *minLength {
-				// TODO: can we do short circuit eval with fns returning mul values instead of nesting ifs?
-				if m, _ := checker.IsMisspelled(sanitized, dict); m {
-					// TODO: handle the suggestion(s)
-					misp := Misspelling{sanitized, fileset.Position(com.Pos()).Line}
-					res.Misspellings = append(res.Misspellings, misp)
-				}
-			}
-		}
-	}
-}
-
-func stringFromPosition(src []byte, start, end token.Pos) string {
-	// TODO: can we do this without creating so many objects?
-	beginOffset, endOffset := fileset.Position(start).Offset, fileset.Position(end).Offset
-	return string(src[beginOffset:endOffset])
 }
 
 func checkPositiveArg(value *int, arg string) {
@@ -115,14 +92,53 @@ func checkPositiveArg(value *int, arg string) {
 	}
 }
 
-func main() {
+// handleFlags parses the command line flags and sets the processor
+// on success, returns an error otherwise.
+func handleFlags() error {
+	log.SetFlags(0) // do not prefix message with timestamp
 	flag.Parse()
 	checkPositiveArg(minLength, "l")
 	checkPositiveArg(maxSwaps, "s")
 	checkPositiveArg(maxIns, "i")
 	checkPositiveArg(maxDel, "d")
 
+
+	proc = goProcessor{}
+	fileSuffix = ".go"
+
+	var altLang uint8 = 0
+	var langs = []struct{
+		isSet bool
+		suffix string
+	}{
+		{*langC, ".c"},
+		{*langCpp, ".cc"},
+		{*langJava, ".java"},
+		{*langScala, ".scala"},
+	}
+
+	for _, l := range(langs) {
+		if l.isSet {
+			altLang++
+			fileSuffix = l.suffix
+		}
+	}
+
+	if altLang > 1 {
+		return errors.New("cannot specify multiple languages.")
+	}
+	if altLang > 0 {
+		proc = cStyleCommentProcessor{}
+	}
+	return nil
+}
+
+
+func main() {
+	checkError(handleFlags())
+
 	checker = &check.DeltaChecker{
+		MinLength:    *minLength,
 		AllowedIns:   *maxIns,
 		AllowedDel:   *maxDel,
 		AllowedSwaps: *maxSwaps}

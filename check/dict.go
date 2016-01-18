@@ -24,22 +24,6 @@ func (ab Alphabet) Contains(r rune) bool {
 	return ok
 }
 
-// sanitizeWord returns a lowercase copy of the word with the last character
-// removed if it's not included in the alphabet.
-// TODO: this should probably be attached to a language construct
-//   instead of an alphabet
-func (ab Alphabet) Sanitize(word string) string {
-	// TODO: this is crap code!
-	// be smarter with allocations
-	if len(word) == 0 {
-		return word
-	}
-	if !ab.Contains(rune(word[len(word)-1])) {
-		return strings.ToLower(word[0:len(word)-1])
-	}
-	return strings.ToLower(word)
-}
-
 func NewAlphabet(letters []rune) *Alphabet {
 	lettersMap := make(map[rune]bool)
 	for l := range letters {
