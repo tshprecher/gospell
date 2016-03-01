@@ -1,6 +1,3 @@
-// Package main runs this
-// line two
-// line three
 package main
 
 import (
@@ -9,31 +6,38 @@ import (
 	"fmt"
 	"github.com/tshprecher/gospell/check"
 	"github.com/tshprecher/gospell/lang"
-	"io/ioutil"
 	"go/token"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
 var (
-	// tunable variables
-	minLength = flag.Int("vL", 4, "filter out words less than 'l' characters")
-	maxSwaps  = flag.Int("vS", 1, "correct spelling up to 's' consecutive character swaps")
-	maxIns    = flag.Int("vI", 0, "correct spelling up to 'i' character insertions")
-	maxDel    = flag.Int("vD", 0, "correct spelling up to 'd' character deletions")
-
+	// TODO: allow tunable variables
+	/*	minLength = flag.Int("vL", 4, "filter out words less than 'l' characters")
+		maxSwaps  = flag.Int("vS", 1, "correct spelling up to 's' consecutive character swaps")
+		maxIns    = flag.Int("vI", 0, "correct spelling up to 'i' character insertions")
+		maxDel    = flag.Int("vD", 0, "correct spelling up to 'd' character deletions")
+	*/
 	// flags for other languages (comments only)
 	langC     = flag.Bool("c", false, "process C files")
 	langCpp   = flag.Bool("cpp", false, "process C++ files")
 	langJava  = flag.Bool("java", false, "process Java files")
-	langScala  = flag.Bool("scala", false, "process Scala files")
+	langScala = flag.Bool("scala", false, "process Scala files")
 
-	fileSuffix string = ".go" // TODO: adapt for multiple suffixes, e.g. ".cpp" and ".cc"
-	fileset *token.FileSet = token.NewFileSet() // TODO: put this in process.go?
-	checker check.Checker
-	proc  processor
+	fileRegexp *regexp.Regexp
+	fileset    *token.FileSet = token.NewFileSet() // TODO: put this in process.go?
+	checker                   = check.UnionChecker{
+		[]check.Checker{
+			check.DeltaChecker{5, 0, 0, 1},
+			check.DeltaChecker{5, 0, 1, 0},
+			check.DeltaChecker{5, 1, 0, 0},
+		},
+	}
+	proc processor = cStyleCommentProcessor{checker}
 )
 
 func checkError(err error) {
@@ -45,15 +49,15 @@ func checkError(err error) {
 func isInputFile(finfo os.FileInfo) bool {
 	return !finfo.IsDir() &&
 		!strings.HasPrefix(finfo.Name(), ".") &&
-		strings.HasSuffix(finfo.Name(), fileSuffix)
+		fileRegexp.MatchString(finfo.Name())
 }
 
 func processFile(filename string, dict check.Dict) (*fileResult, error) {
 	src, err := ioutil.ReadFile(filename)
 	if err != nil {
-	 	return nil, err
+		return nil, err
 	}
-	return proc.process(filename, src, dict)
+	return proc.run(filename, src, dict)
 }
 
 func processDir(dir string, dict check.Dict) error {
@@ -65,10 +69,8 @@ func processDir(dir string, dict check.Dict) error {
 
 		if isInputFile(f) {
 			fileFound = true
-//			fmt.Printf("debug: processing file %s\n", path)
 			res, err := processFile(path, dict)
 			if err != nil {
-				fmt.Println(err)
 				return err
 			}
 			fmt.Print(res)
@@ -97,30 +99,31 @@ func checkPositiveArg(value *int, arg string) {
 func handleFlags() error {
 	log.SetFlags(0) // do not prefix message with timestamp
 	flag.Parse()
-	checkPositiveArg(minLength, "l")
-	checkPositiveArg(maxSwaps, "s")
-	checkPositiveArg(maxIns, "i")
-	checkPositiveArg(maxDel, "d")
+	/*
+		checkPositiveArg(minLength, "l")
+		checkPositiveArg(maxSwaps, "s")
+		checkPositiveArg(maxIns, "i")
+		checkPositiveArg(maxDel, "d")*/
 
-
-	proc = goProcessor{}
-	fileSuffix = ".go"
+	r, _ := regexp.Compile(".*\\.go$")
+	fileRegexp = r
 
 	var altLang uint8 = 0
-	var langs = []struct{
-		isSet bool
-		suffix string
+	var langs = []struct {
+		isSet   bool
+		pattern string
 	}{
-		{*langC, ".c"},
-		{*langCpp, ".cc"},
-		{*langJava, ".java"},
-		{*langScala, ".scala"},
+		{*langC, ".*\\.c$"},
+		{*langCpp, "(.*\\.cc$)|(.*\\.cpp$)"},
+		{*langJava, ".*\\.java$"},
+		{*langScala, ".*\\.scala$"},
 	}
 
-	for _, l := range(langs) {
+	for _, l := range langs {
 		if l.isSet {
 			altLang++
-			fileSuffix = l.suffix
+			r, _ := regexp.Compile(l.pattern)
+			fileRegexp = r
 		}
 	}
 
@@ -128,29 +131,22 @@ func handleFlags() error {
 		return errors.New("cannot specify multiple languages.")
 	}
 	if altLang > 0 {
-		proc = cStyleCommentProcessor{}
+		proc = cStyleCommentProcessor{checker}
 	}
 	return nil
 }
 
-
 func main() {
 	checkError(handleFlags())
-
-	checker = &check.DeltaChecker{
-		MinLength:    *minLength,
-		AllowedIns:   *maxIns,
-		AllowedDel:   *maxDel,
-		AllowedSwaps: *maxSwaps}
 
 	for a := 0; a < flag.NArg(); a++ {
 		filename := flag.Arg(a)
 		fileInfo, err := os.Stat(filename)
 		checkError(err)
-		// TODO: define a Language struct encapsulating alphabet and words
-		dict, err := check.NewTrie(lang.Words, lang.English)
-		checkError(err)
-
+		dict := check.NewTrie(lang.EnglishAlphabet)
+		for _, word := range lang.EnglishUsWords {
+			dict.Add(word)
+		}
 		if fileInfo.IsDir() {
 			err = processDir(filename, dict)
 			checkError(err)
