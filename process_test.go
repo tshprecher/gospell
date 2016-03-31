@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/tshprecher/gospell/check"
 	"github.com/tshprecher/gospell/lang"
 	"io/ioutil"

@@ -4,8 +4,8 @@ This project attempts to automate spell checking for comments in Go code. Most
 modern languages rely on comments for documentation, and I was curious to see to what
 degree this can be automated. It's split into a few packages:
 
-1) Package "check" contains generic logic for spell checking works given an alphabet
-   and dictionary. It works as a standalong spell checking package.
+1) Package "check" contains generic logic for spell checking given an alphabet
+   and dictionary. It works as a standalone spell checking package.
 2) Package "lang" store dictionary data and currently only supports English(US).
 3) Package "scrape" has logic to scrape data from Merriam-Webster's online dictionary.
 4) Package "main" builds a binary to run predefined or tunable spell checkers against specific
