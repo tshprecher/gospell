@@ -53,6 +53,7 @@ type cStyleCommentProcessor struct {
 }
 
 func handleComments(curLineNo int, comment string, dict check.Dict, res *fileResult) {
+	var lines []string = strings.Split(comment, "\n")
 	if len(lines) == 0 {
 		lines = append(lines, comment)
 	}
@@ -60,7 +61,6 @@ func handleComments(curLineNo int, comment string, dict check.Dict, res *fileRes
 		for _, word := range strings.Split(lines[l], " ") {
 			sanitized := sanitizeWord(word, dict.Alphabet())
 			if mis, sug := checker.IsMisspelled(sanitized, dict); mis {
-				fmt.Printf("misspelled word -> %s\n", sanitized)
 				m := misspelling{curLineNo - len(lines) + 1 + l, sanitized, sug}
 				res.misspellings = append(res.misspellings, m)
 			}
@@ -75,8 +75,6 @@ func (p cStyleCommentProcessor) run(filename string, src []byte, dict check.Dict
 
 	for tok := scan.Scan(); tok != scanner.EOF; tok = scan.Scan() {
 		if tok == scanner.Comment {
-			fmt.Printf("%s: comment text found on line %d\n", filename, scan.Pos().Line)
-			fmt.Printf("%s: comment text \n\n%s\n", filename, scan.TokenText())
 			handleComments(scan.Pos().Line, scan.TokenText(), dict, res)
 		}
 	}

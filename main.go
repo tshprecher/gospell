@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/tshprecher/gospell/check"
 	"github.com/tshprecher/gospell/lang"
-	"go/token"
 	"io/ioutil"
 	"log"
 	"os"
@@ -15,13 +14,19 @@ import (
 	"strings"
 )
 
+const (
+	defaultMinLength = 5
+	defaultMaxSwaps  = 1
+	defaultMaxIns    = 0
+	defaultMaxDel    = 0
+)
+
 var (
-	// TODO: allow tunable variables
-	/*	minLength = flag.Int("vL", 4, "filter out words less than 'l' characters")
-		maxSwaps  = flag.Int("vS", 1, "correct spelling up to 's' consecutive character swaps")
-		maxIns    = flag.Int("vI", 0, "correct spelling up to 'i' character insertions")
-		maxDel    = flag.Int("vD", 0, "correct spelling up to 'd' character deletions")
-	*/
+	minLength = flag.Int("ml", defaultMinLength, "filter out words less than 'ml' characters")
+	maxSwaps  = flag.Int("ms", defaultMaxSwaps, "correct spelling up to 'ms' consecutive character swaps")
+	maxIns    = flag.Int("mi", defaultMaxIns, "correct spelling up to 'mi' character insertions")
+	maxDel    = flag.Int("md", defaultMaxDel, "correct spelling up to 'md' character deletions")
+
 	// flags for other languages (comments only)
 	langC     = flag.Bool("c", false, "process C files")
 	langCpp   = flag.Bool("cpp", false, "process C++ files")
@@ -29,8 +34,7 @@ var (
 	langScala = flag.Bool("scala", false, "process Scala files")
 
 	fileRegexp *regexp.Regexp
-	fileset    *token.FileSet = token.NewFileSet() // TODO: put this in process.go?
-	checker                   = check.UnionChecker{
+	checker    check.Checker = check.UnionChecker{
 		[]check.Checker{
 			check.DeltaChecker{5, 0, 0, 1},
 			check.DeltaChecker{5, 0, 1, 0},
@@ -42,7 +46,7 @@ var (
 
 func checkError(err error) {
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal("error: " + err.Error())
 	}
 }
 
@@ -90,7 +94,7 @@ func processDir(dir string, dict check.Dict) error {
 
 func checkPositiveArg(value *int, arg string) {
 	if *value < 0 {
-		log.Fatalf("arg '%v' must be positive.", arg)
+		log.Fatalf("error: arg '%v' must be positive.", arg)
 	}
 }
 
@@ -99,11 +103,24 @@ func checkPositiveArg(value *int, arg string) {
 func handleFlags() error {
 	log.SetFlags(0) // do not prefix message with timestamp
 	flag.Parse()
-	/*
-		checkPositiveArg(minLength, "l")
-		checkPositiveArg(maxSwaps, "s")
-		checkPositiveArg(maxIns, "i")
-		checkPositiveArg(maxDel, "d")*/
+
+	checkPositiveArg(minLength, "ml")
+	checkPositiveArg(maxSwaps, "ms")
+	checkPositiveArg(maxIns, "mi")
+	checkPositiveArg(maxDel, "md")
+
+	if *minLength != defaultMinLength ||
+		*maxSwaps != defaultMaxSwaps ||
+		*maxIns != defaultMaxIns ||
+		*maxDel != defaultMaxDel {
+		// if any of the default value are set, override
+		// the default checker
+		checker = check.DeltaChecker{
+			*minLength,
+			*maxIns,
+			*maxDel,
+			*maxSwaps}
+	}
 
 	r, _ := regexp.Compile(".*\\.go$")
 	fileRegexp = r
@@ -139,13 +156,17 @@ func handleFlags() error {
 func main() {
 	checkError(handleFlags())
 
+	if flag.NArg() == 0 {
+		log.Fatal("error: no files found.")
+	}
+
 	for a := 0; a < flag.NArg(); a++ {
 		filename := flag.Arg(a)
 		fileInfo, err := os.Stat(filename)
 		checkError(err)
 		dict := check.NewTrie(lang.EnglishAlphabet)
 		for _, word := range lang.EnglishUsWords {
-			dict.Add(word)
+			dict.Add(word.Word)
 		}
 		if fileInfo.IsDir() {
 			err = processDir(filename, dict)

@@ -7,7 +7,7 @@ import (
 // not misspelled
 // main function
 func main() {
-	// misspelled -> Helo
+	// misspelled -> Helllo
 	/*
 	   misspelled -> wrold.
 	*/

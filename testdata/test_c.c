@@ -4,7 +4,7 @@
 // main function
 int main()
 {
-  // misspelled -> Helo
+  // misspelled -> Helllo
   /*
      misspelled -> wrold.
   */

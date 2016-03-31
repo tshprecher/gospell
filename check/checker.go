@@ -86,11 +86,7 @@ func (dc DeltaChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
 	return dc.isMisspelledDelta(buf, dict, len(wordSlice), dc.AllowedIns, dc.AllowedDel, dc.AllowedSwaps)
 }
 
-func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, len, ins, del, swaps int) (bool, []string) {
-	return dc.isMisspelledDeltaIter(word, dict, len, ins, del, swaps)
-}
-
-func (dc *DeltaChecker) isMisspelledDeltaIter(word []rune, dict Dict, length, ins, del, swaps int) (bool, []string) {
+func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, del, swaps int) (bool, []string) {
 	// fmt.Printf("checking word '%s'\n", string(word))
 	stack := make([]interface{}, ins+del+swaps)
 	depth := 0
