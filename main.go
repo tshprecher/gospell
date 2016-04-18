@@ -19,13 +19,15 @@ const (
 	defaultMaxSwaps  = 1
 	defaultMaxIns    = 0
 	defaultMaxDel    = 0
+	defaultMaxMods   = 0
 )
 
 var (
-	minLength = flag.Int("ml", defaultMinLength, "filter out words less than 'ml' characters")
-	maxSwaps  = flag.Int("ms", defaultMaxSwaps, "correct spelling up to 'ms' consecutive character swaps")
-	maxIns    = flag.Int("mi", defaultMaxIns, "correct spelling up to 'mi' character insertions")
-	maxDel    = flag.Int("md", defaultMaxDel, "correct spelling up to 'md' character deletions")
+	minLength = flag.Uint("ml", defaultMinLength, "filter out words less than 'ml' characters")
+	maxSwaps  = flag.Uint("ms", defaultMaxSwaps, "correct spelling up to 'ms' consecutive character swaps")
+	maxIns    = flag.Uint("mi", defaultMaxIns, "correct spelling up to 'mi' character insertions")
+	maxDel    = flag.Uint("md", defaultMaxDel, "correct spelling up to 'md' character deletions")
+	maxMods   = flag.Uint("mm", defaultMaxMods, "correct spelling up to 'mm' character modifications")
 
 	// flags for other languages (comments only)
 	langC     = flag.Bool("c", false, "process C files")
@@ -34,13 +36,16 @@ var (
 	langScala = flag.Bool("scala", false, "process Scala files")
 
 	fileRegexp *regexp.Regexp
-	checker    check.Checker = check.UnionChecker{
-		[]check.Checker{
-			check.DeltaChecker{5, 0, 0, 1},
-			check.DeltaChecker{5, 0, 1, 0},
-			check.DeltaChecker{5, 1, 0, 0},
-		},
-	}
+	checker    check.Checker =
+		check.And(
+		check.MinLengthChecker(defaultMinLength),
+		check.Or(
+			check.DeltaChecker{1, 0, 0, 0},
+			check.DeltaChecker{0, 1, 0, 0},
+			check.DeltaChecker{0, 0, 1, 0},
+			check.DeltaChecker{0, 0, 0, 1}))
+
+
 	proc processor = cStyleCommentProcessor{checker}
 )
 
@@ -92,34 +97,27 @@ func processDir(dir string, dict check.Dict) error {
 	return nil
 }
 
-func checkPositiveArg(value *int, arg string) {
-	if *value < 0 {
-		log.Fatalf("error: arg '%v' must be positive.", arg)
-	}
-}
-
 // handleFlags parses the command line flags and sets the processor
 // on success, returns an error otherwise.
 func handleFlags() error {
 	log.SetFlags(0) // do not prefix message with timestamp
 	flag.Parse()
 
-	checkPositiveArg(minLength, "ml")
-	checkPositiveArg(maxSwaps, "ms")
-	checkPositiveArg(maxIns, "mi")
-	checkPositiveArg(maxDel, "md")
-
 	if *minLength != defaultMinLength ||
 		*maxSwaps != defaultMaxSwaps ||
 		*maxIns != defaultMaxIns ||
-		*maxDel != defaultMaxDel {
+		*maxDel != defaultMaxDel ||
+		*maxMods != defaultMaxMods {
 		// if any of the default value are set, override
 		// the default checker
-		checker = check.DeltaChecker{
-			*minLength,
-			*maxIns,
-			*maxDel,
-			*maxSwaps}
+		checker = check.And(
+			check.MinLengthChecker(*minLength),
+			check.DeltaChecker{
+				*maxIns,
+				*maxDel,
+				*maxSwaps,
+				*maxMods,
+			})
 	}
 
 	r, _ := regexp.Compile(".*\\.go$")
@@ -166,7 +164,10 @@ func main() {
 		checkError(err)
 		dict := check.NewTrie(lang.EnglishAlphabet)
 		for _, word := range lang.EnglishUsWords {
-			dict.Add(word.Word)
+			// disregard unpopular words
+			if word.Popularity >= 2 {
+				dict.Add(word.Word)
+			}
 		}
 		if fileInfo.IsDir() {
 			err = processDir(filename, dict)

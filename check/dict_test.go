@@ -3,7 +3,7 @@ package check
 import "testing"
 
 func TestAlphabet(t *testing.T) {
-	alphabet := NewAlphabet([]rune{'a', 'b', 'c'})
+	alphabet := NewAlphabet("abc")
 
 	if alphabet.Size() != 3 {
 		t.Errorf("expected size -> 3, received size -> %d.", alphabet.Size())

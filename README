@@ -39,9 +39,3 @@ following features:
       -- the frequency of a misspelled word wherein some threshold declassifies the misspelling
       -- adapt the insertion, deletion, and swap restrictions based on the size of the word so
          longer words can differ by more changes.
-
-**** TODO *****
-
--- The minimum length check is currently bound to the other features inside DeltaChecker. This can
-   be refactored out and composed for reusability.
--- The set of English words is incomplete. Some plurals exists while others are missing.

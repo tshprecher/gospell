@@ -26,7 +26,7 @@ func TestTrie(t *testing.T) {
 		{"12345", false},
 	}
 
-	trie := NewTrie(*NewAlphabet([]rune{'1', '2', '3', '4',}))
+	trie := NewTrie(*NewAlphabet("1234"))
 
 	for w := range(words) {
 		if ok := trie.Add(words[w]); !ok {

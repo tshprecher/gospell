@@ -14,27 +14,24 @@ type Checker interface {
 	IsMisspelled(word string, dict Dict) (res bool, suggested []string)
 }
 
-// A StrictChecker classifies a word as misspelled if it does not exist in
-// the dictionary provided.
-type StrictChecker struct{}
-
-func (StrictChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
-	if dict.Contains([]rune(word)) {
-		return false, nil
-	}
-	return true, nil
+func And(checkers ...Checker) Checker {
+	return intersectChecker{checkers}
 }
 
-// A UnionChecker takes a slice of checkers and classifies a word as
+func Or(checkers ...Checker) Checker {
+	return unionChecker{checkers}
+}
+
+// A unionChecker takes a slice of checkers and classifies a word as
 // misspelled if it's classified as such by at least one of the checkers.
-type UnionChecker struct{
-	Checkers []Checker
+type unionChecker struct{
+	checkers []Checker
 }
 
-func (c UnionChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
+func (c unionChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
 	var suggestions = make(map[string]bool)
 	var result bool
-	for _, c := range(c.Checkers) {
+	for _, c := range(c.checkers) {
 		if ok, sug := c.IsMisspelled(word, dict); ok {
 			for s := range sug {
 				suggestions[sug[s]] = true
@@ -51,47 +48,84 @@ func (c UnionChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
 	} else {
 		return result, nil
 	}
+}
 
+// An intersectChecker takes a slice of checkers and classifies a word as
+// misspelled if it's classified as such by all of the checkers.
+type intersectChecker struct {
+	checkers []Checker
+}
+
+func (c intersectChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
+	var suggestions []string
+	for _, c := range(c.checkers) {
+		if ok, sug := c.IsMisspelled(word, dict); !ok {
+			return false, nil
+		} else {
+			suggestions = sug
+		}
+	}
+	return true, suggestions
+}
+
+// A StrictChecker classifies a word as misspelled if it does not exist in
+// the dictionary provided.
+type StrictChecker struct{}
+
+func (StrictChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
+	if dict.Contains([]rune(word)) {
+		return false, nil
+	}
+	return true, nil
+}
+
+// A MinLengthChecker classifies a word as misspelled iff the length of the word
+// is greater than a given value.
+type MinLengthChecker uint8
+
+func (c MinLengthChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
+	if len(word) >= int(c) {
+		return true, nil
+	}
+	return false, nil
 }
 
 // A DeltaChecker classifies a word as misspelled if its length is >= MinLength
 // and is within a given number of character deletions, inserts, and consecutive
 // swaps.
 type DeltaChecker struct {
-	MinLength    int
-	AllowedIns   int
-	AllowedDel   int
-	AllowedSwaps int
+	AllowedIns   uint
+	AllowedDel   uint
+	AllowedSwaps uint
+	AllowedMods uint
 }
 
-func (dc DeltaChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
-	if len(word) < dc.MinLength {
-		return false, nil
-	}
+func (c DeltaChecker) IsMisspelled(word string, dict Dict) (bool, []string) {
 	wordSlice := []rune(word)
 	if dict.Contains(wordSlice) {
 		return false, nil
 	}
-	if dc.AllowedIns+dc.AllowedDel+dc.AllowedSwaps == 0 {
-		return !dict.Contains(wordSlice), nil
-	}
+
 	for _, r := range(wordSlice) {
 		if !dict.Alphabet().Contains(r) {
 			return false, nil
 		}
 	}
 
-	buf := make([]rune, len(wordSlice)+dc.AllowedIns)
+	buf := make([]rune, uint(len(wordSlice))+c.AllowedIns)
 	copy(buf, wordSlice)
-	return dc.isMisspelledDelta(buf, dict, len(wordSlice), dc.AllowedIns, dc.AllowedDel, dc.AllowedSwaps)
+	return c.isMisspelledDelta(buf, dict, uint(len(wordSlice)), c.AllowedIns, c.AllowedDel, c.AllowedSwaps, c.AllowedMods)
 }
 
-func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, del, swaps int) (bool, []string) {
-	// fmt.Printf("checking word '%s'\n", string(word))
-	stack := make([]interface{}, ins+del+swaps)
+func (c *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, del, swaps, mods uint) (bool, []string) {
+	if ins+del+swaps+mods == 0 {
+		return !dict.Contains(word[:length]), nil
+	}
+
+	stack := make([]interface{}, ins+del+swaps+mods)
 	depth := 0
 
-	// 3 types of nodes: insertion, deletion, swap
+	// 4 types of nodes: insertion, deletion, swap, modification
 	type insertion struct {
 		locationIndex int
 		letterIndex int
@@ -103,28 +137,34 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, d
 	type swap struct {
 		index int
 	}
+	type mod struct{
+		replaced rune
+		locationIndex int
+		letterIndex int
+	}
 
 	// push the nodes onto the stack
-	for i := 0; i < ins; i++ {
+	for i := uint(0); i < ins; i++ {
 		stack[depth] = &insertion{-1, -1}
 		depth++
 	}
-	for d := 0; d < del; d++ {
+	for d := uint(0); d < del; d++ {
 		stack[depth] = &deletion{-1, -1}
 		depth++
 	}
-	for s := 0; s < swaps; s++ {
+	for s := uint(0); s < swaps; s++ {
 		stack[depth] = &swap{-1}
+		depth++
+	}
+	for m := uint(0); m < mods; m++ {
+		stack[depth] = &mod{-1, -1, -1}
 		depth++
 	}
 
 	// iterate through all paths with some paths visited multiple times based
 	// on the input parameters.
-	var loopRan = false
 	var curDepth = 0
-	for curDepth >= 0 || !loopRan {
-		// fmt.Printf("current depth: %d\n", curDepth)
-		loopRan = true
+	for curDepth >= 0 {
 		var currentWord []rune
 		// get the current type and go to the next state
 		switch op := stack[curDepth].(type) {
@@ -133,7 +173,7 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, d
 				op.index = 0
 				curDepth = min(curDepth+1, depth-1)
 				continue;
-			} else if op.index > length-2 {
+			} else if op.index > int(length)-2 {
 				if op.index-1 >= 0 {
 					word[op.index-1], word[op.index] = word[op.index], word[op.index-1]
 				}
@@ -141,28 +181,56 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, d
 				curDepth--;
 				continue;
 			} else {
-				// fmt.Printf("current swap index: %d\n", op.index)
 				if op.index > 0 {
 					word[op.index-1], word[op.index] = word[op.index], word[op.index-1]
 				}
 				word[op.index], word[op.index+1] = word[op.index+1], word[op.index]
-				// fmt.Printf("current swap length: %d\n", length)
-				// fmt.Printf("current swap: %v\n", *op)
 				op.index++
 				curDepth = min(curDepth+1, depth-1)
 			}
+		case *mod:
+			if op.locationIndex == -1 {
+				op.locationIndex = 0
+				op.letterIndex = 0
+				curDepth = min(curDepth+1, depth-1)
+				continue;
+			} else if op.locationIndex == int(length) {
+				*op = mod{-1, -1, -1}
+				curDepth--;
+				continue;
+			} else if op.letterIndex >= dict.Alphabet().Size() {
+				word[op.locationIndex] = op.replaced
+				op.locationIndex++
+				op.letterIndex = 0
+				op.replaced = -1
+				continue;
+			} else {
+				if op.replaced == -1 {
+					op.replaced = word[op.locationIndex]
+				}
+				modLetter, _ := dict.Alphabet().Letter(op.letterIndex)
+				if modLetter == op.replaced {
+					op.letterIndex++
+					continue;
+				} else {
+					word[op.locationIndex] = modLetter
+					curDepth = min(curDepth+1, depth-1)
+					op.letterIndex++
+				}
+			}
+
 		case *insertion:
 			if op.locationIndex == -1 {
 				op.locationIndex = 0
 				op.letterIndex = 0
 				curDepth = min(curDepth+1, depth-1)
 				continue;
-			} else if op.locationIndex == length {
+			} else if op.locationIndex == int(length) {
 				*op = insertion{-1, -1}
 				curDepth--;
 				continue;
 			} else if op.letterIndex >= dict.Alphabet().Size() {
-				for i := op.locationIndex+1; i < length; i++ {
+				for i := op.locationIndex+1; i < int(length); i++ {
 					word[i-1] = word[i]
 				}
 				length--
@@ -171,11 +239,8 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, d
 				curDepth = min(curDepth+1, depth-1)
 				continue;
 			} else {
-				// fmt.Printf("current insertion length: %d\n", length)
-				// fmt.Printf("current insertion index: %d\n", op.letterIndex)
 				if op.letterIndex == 0 {
-					for i := length; i > op.locationIndex; i-- {
-						// fmt.Printf("current insertion shift index: %d\n", i)
+					for i := int(length); i > op.locationIndex; i-- {
 						word[i] = word[i-1]
 					}
 					length++
@@ -186,21 +251,23 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, d
 			}
 		case *deletion:
 			if op.locationIndex == -1 {
-				op.locationIndex = 0
-				curDepth = min(curDepth+1, depth-1)
+				if length == 0 {
+					curDepth--
+				} else {
+					op.locationIndex = 0
+					curDepth = min(curDepth+1, depth-1)
+				}
 				continue;
-			} else if op.locationIndex > length {
+			} else if op.locationIndex > int(length) {
 				word[length] = op.letter
 				*op = deletion{-1, -1}
 				length++
 				curDepth--;
 				continue;
 			} else {
-				// fmt.Printf("current deletion length: %d\n", length)
-				// fmt.Printf("current deletion index: %d\n", op.locationIndex)
 				if op.locationIndex == 0 {
 					op.letter = word[op.locationIndex]
-					for i := 0; i < length-1; i++ {
+					for i := 0; i < int(length)-1; i++ {
 						word[i] = word[i+1]
 					}
 					length--
@@ -215,7 +282,6 @@ func (dc *DeltaChecker) isMisspelledDelta(word []rune, dict Dict, length, ins, d
 		}
 
 		currentWord = word[:length]
-		// fmt.Printf("current word: %s\n", string(currentWord))
 		if dict.Contains(currentWord) {
 			return true, []string{string(currentWord)}
 		}

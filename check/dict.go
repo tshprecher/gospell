@@ -1,5 +1,9 @@
 package check
 
+import (
+	"strings"
+)
+
 // A Dict represents a dictionary of words.
 type Dict interface {
 	// Contains returns true iff the dictionary contains the word
@@ -9,36 +13,30 @@ type Dict interface {
 }
 
 // An Alphabet represents the set of character allowed in a word.
-type Alphabet struct {
-	letters []rune
-}
+type Alphabet string
 
 // Size returns the number of characters.
 func (ab Alphabet) Size() int {
-	return len(ab.letters)
+	return len(string(ab))
 }
 
 // Contains returns true iff the character exists in the alphabet.
 func (ab Alphabet) Contains(r rune) bool {
-	for l := range(ab.letters) {
-		if ab.letters[l] == r {
-			return true
-		}
-	}
-	return false
+	return strings.ContainsRune(string(ab), r)
 }
 
 // Letter returns the character at a given index into the alphabet.
-// ok == true iff the character exists.
+// ok == true iff a character at the index exists.
 func (ab Alphabet) Letter(index int) (letter rune, ok bool) {
 	if index < 0 || index >= ab.Size() {
 		ok = false
 		return
 	}
-	return ab.letters[index], true
+	return []rune(string(ab))[index], true
 }
 
 // NewAlphabet creates an alphabet from the given slice of characters.
-func NewAlphabet(letters []rune) *Alphabet {
-	return &Alphabet{letters}
+func NewAlphabet(letters string) *Alphabet {
+	ab := Alphabet(letters)
+	return &ab
 }

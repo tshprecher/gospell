@@ -11,7 +11,7 @@ type test struct {
 }
 
 var (
-	alphabet = *NewAlphabet([]rune{'1','2','3','4'})
+	alphabet = *NewAlphabet("1234")
 	words = []string{
 		"1",
 		"12",
@@ -43,6 +43,19 @@ func runTests(t *testing.T, checker Checker, initialWords []string, tests []test
 	}
 }
 
+func TestMinLengthChecker(t *testing.T) {
+	var tests = []test{
+		{"", false, nil},
+		{"1", false, nil},
+		{"11", false, nil},
+		{"111", true, nil},
+		{"1111", true, nil},
+	}
+
+	mlc := MinLengthChecker(3)
+	runTests(t, mlc, words, tests)
+}
+
 func TestStrictChecker(t *testing.T) {
 	var tests = []test{
 		{"1", false, nil},
@@ -57,23 +70,6 @@ func TestStrictChecker(t *testing.T) {
 	runTests(t, sc, words, tests)
 }
 
-func TestDeltaCheckerMinLength(t *testing.T) {
-	var tests = []test{
-		{"2", false, nil},
-		{"22", false, nil},
-		{"222", true, nil},
-		{"2222", true, nil},
-	}
-
-	dc := DeltaChecker{
-		MinLength: 3,
-		AllowedIns:   0,
-		AllowedDel:   0,
-		AllowedSwaps: 0}
-
-	runTests(t, dc, words, tests)
-}
-
 func TestDeltaCheckerInsertions(t *testing.T) {
 	// single insertions
 	var tests = []test{
@@ -84,10 +80,7 @@ func TestDeltaCheckerInsertions(t *testing.T) {
 		{"134", true, []string{"1234"}},
 	}
 
-	dc := DeltaChecker{
-		AllowedIns:   1,
-		AllowedDel:   0,
-		AllowedSwaps: 0}
+	dc := DeltaChecker{AllowedIns:   1}
 
 	runTests(t, dc, words, tests)
 
@@ -112,10 +105,7 @@ func TestDeltaCheckerDeletions(t *testing.T) {
 		{"11234", true, []string{"1234"}},
 	}
 
-	dc := DeltaChecker{
-		AllowedIns:   0,
-		AllowedDel:   1,
-		AllowedSwaps: 0}
+	dc := DeltaChecker{AllowedDel: 1}
 
 	runTests(t, dc, words, tests)
 
@@ -143,11 +133,7 @@ func TestDeltaCheckerSwaps(t *testing.T) {
 		{"1243", true, []string{"1234"}},
 	}
 
-	dc := DeltaChecker{
-		AllowedIns:   0,
-		AllowedDel:   0,
-		AllowedSwaps: 1}
-
+	dc := DeltaChecker{AllowedSwaps: 1}
 	runTests(t, dc, words, tests)
 
 	// multiple swaps
@@ -161,7 +147,18 @@ func TestDeltaCheckerSwaps(t *testing.T) {
 	runTests(t, dc, words, tests)
 }
 
-func TestDeltaCheckerAll(t *testing.T) {
+func TestDeltaCheckerMods(t *testing.T) {
+	var tests = []test{
+		{"12344", false, nil},
+		{"333", false, nil},
+		{"133", true, []string{"123"}},
+	}
+
+	dc := DeltaChecker{AllowedMods: 1}
+	runTests(t, dc, words, tests)
+}
+
+func TestDeltaCheckerCombine(t *testing.T) {
 	var tests = []test{
 		{"1", false, nil},
 		{"132", true, []string{"123"}},        // swapped chars           -> misspelled
@@ -188,19 +185,26 @@ func TestUnionChecker(t *testing.T) {
 		{"134", true, []string{"1234"}},
 	}
 
-	dcOne := DeltaChecker{
-		MinLength: 0,
-		AllowedIns: 0,
-		AllowedDel: 0,
-		AllowedSwaps: 1}
+	dcOne := DeltaChecker{AllowedSwaps: 1}
+	dcTwo := DeltaChecker{AllowedIns: 1}
 
-	dcTwo := DeltaChecker{
-		MinLength: 0,
-		AllowedIns: 1,
-		AllowedDel: 0,
-		AllowedSwaps: 0}
-
-	uc := UnionChecker{[]Checker{dcOne, dcTwo}}
+	uc := unionChecker{[]Checker{dcOne, dcTwo}}
 
 	runTests(t, uc, words, tests)
+}
+
+func TestIntersectChecker(t *testing.T) {
+	var tests = []test{
+		{"1224", true, []string{"1234"}},
+		{"12344", false, nil},
+		{"333", false, nil},
+		{"133", false, nil},
+	}
+
+	lc := MinLengthChecker(4)
+	mc := DeltaChecker{AllowedMods: 1}
+
+	ic := intersectChecker{[]Checker{lc, mc}}
+
+	runTests(t, ic, words, tests)
 }
