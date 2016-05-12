@@ -1,22 +1,27 @@
-*********************************** WORK IN PROGRESS ****************************************
+******************************** WORK IN PROGRESS ****************************
+******************************************************************************
 
 This project attempts to automate spell checking for comments in Go code. Most
-modern languages rely on comments for documentation, and I was curious to see to what
-degree this can be automated. It's split into a few packages:
+modern languages rely on comments for documentation, and I was curious to see
+to what degree this can be automated. It's split into a few packages:
 
 1) Package "check" contains generic logic for spell checking given an alphabet
    and dictionary. It works as a standalone spell checking package.
-2) Package "lang" store dictionary data and currently only supports English(US).
-3) Package "scrape" has logic to scrape data from Merriam-Webster's online dictionary.
-4) Package "main" builds a binary to run predefined or tunable spell checkers against specific
-   files or recursively on a directory. Java, C, C++, and Scala files are also supported
-   with the default being Go.
+2) Package "lang" store dictionary data and currently only supports
+   English(US).
+3) Package "scrape" has logic to scrape data from Merriam-Webster's online
+   dictionary.
+4) Package "main" builds a binary to run predefined or tunable spell checkers
+   against specific files or recursively on a directory. Java, C, C++, and
+   Scala files are also supported, with the default being Go.
 
-So what's considered a misspelling? Since comments are often code expressions and not valid
-grammar, it's not rational to simply check each space-delimited string against a dictionary.
-The default behavior classifies a misspelled word if it's
+So what's considered a misspelling?
 
-    - at least 5 characters
+Since comments are often code expressions and not valid grammar, it's not
+rational to simply check each space-delimited string against a dictionary.
+The default behavior classifies a misspelled word if it:
+
+    - has at least 5 characters
         and
             - differs by 1 character insertion
             or
@@ -26,16 +31,23 @@ The default behavior classifies a misspelled word if it's
 
 To run the classifier on a Go project:
 
-   $ ./gospell .
+    $ ./gospell .
 
-There's minimal tuning support. To classify against words that are at least 4 characters and
-differ by at most 2 insertions:
+There's minimal tuning support. To classify against words that:
 
-   $ ./gospell -ml=4 -mi=2 .
+    - are at least 4 characters long
+    and
+    - differ by at most 2 insertions:
 
-This is a decent start. Results often need pruning by a human eye. It may be worth exploring the
-following features:
+Try:
 
-      -- the frequency of a misspelled word wherein some threshold declassifies the misspelling
-      -- adapt the insertion, deletion, and swap restrictions based on the size of the word so
-         longer words can differ by more changes.
+    $ ./gospell -ml=4 -mi=2 .
+
+This is a decent start. Results often need pruning by a human eye. It may be
+worth exploring the following features:
+
+      -- the frequency of a misspelled word wherein some threshold
+         declassifies the misspelling
+      -- adapt the insertion, deletion, and swap restrictions
+         based on the size of the word,
+         so longer words can differ by more changes.
